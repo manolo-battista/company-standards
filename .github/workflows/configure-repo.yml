@@ -1,0 +1,53 @@
+name: Configure Repository
+
+on:
+  workflow_dispatch:
+    inputs:
+      project-type:
+        description: 'Select project type'
+        required: true
+        type: choice
+        options:
+          - elixir
+          - nextjs
+      enable-dependabot:
+        description: 'Enable Dependabot configuration?'
+        required: true
+        default: 'true'
+        type: boolean
+
+jobs:
+  configure-repo:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PROJECT_TYPE: ${{ github.event.inputs.project-type }}
+      ENABLE_DEPENDABOT: ${{ github.event.inputs.enable-dependabot }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Configure repository settings
+        run: |
+          gh repo edit ${{ github.repository }} --enable-squash-merge
+          gh api -X PATCH /repos/${{ github.repository }} \
+            -f allow_merge_commit=false \
+            -f allow_rebase_merge=false \
+            -f delete_branch_on_merge=true \
+            -f has_wiki=false \
+            -f has_issues=false \
+            -f has_projects=false
+
+      - name: Setup git for commits
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+      - name: Configure Dependabot via script
+        if: ${{ github.event.inputs.enable-dependabot == 'true' }}
+        run: |
+          chmod +x .github/scripts/setup-dependabot.sh
+          .github/scripts/setup-dependabot.sh ${{ github.event.inputs.project-type }} .
